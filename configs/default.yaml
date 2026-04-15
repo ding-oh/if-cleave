@@ -1,0 +1,26 @@
+# GeoCleav Configuration
+
+data:
+  dataset_path: "all_datasets_fixed.pkl"
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  window_size: 9
+  undersample_ratio: 1.0
+
+model:
+  type: "gnn"  # Options: gnn, attention, cnn3d, ensemble
+  hidden_dim: 256
+  num_layers: 3
+  dropout: 0.2
+
+training:
+  batch_size: 32
+  learning_rate: 0.001
+  epochs: 100
+  early_stopping_patience: 10
+  device: "cuda"
+
+evaluation:
+  metrics: ["accuracy", "f1", "precision", "recall", "mcc", "auc"]
+  save_predictions: true

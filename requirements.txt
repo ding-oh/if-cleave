@@ -1,0 +1,12 @@
+torch>=2.0
+torch-geometric>=2.4
+fair-esm
+biopython
+freesasa
+propka
+scikit-learn
+numpy
+pandas
+matplotlib
+tqdm
+pyyaml

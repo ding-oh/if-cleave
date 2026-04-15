@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Data & model artifacts
+*.pkl
+*.pt
+*.pth
+*.h5
+*.npz
+*.tar.gz
+
+# Data directories
+CleavgDB_clean/
+MHC1_DB*/
+PDB_downloads/
+data_*/
+cd4_validation*/
+uniprot_txt_files/
+vatreptacog_testset/
+esm2/
+
+# Results & outputs
+results_*/
+reports/
+analysis_plots/
+logs/
+figures/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Misc
+wandb/
+*.zip
+*.xlsx
+*.csv
+*.log
