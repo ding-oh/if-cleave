@@ -2,12 +2,12 @@ PKL ?= all_datasets_fixed.pkl
 WINDOW ?= 11
 RESULTS ?= results
 
-.PHONY: inference train clean
+.PHONY: reproduce train clean
 
 data_if1_w%:
 	python data/prepare_data.py --window_size $* --pkl_file $(PKL)
 
-inference: data_if1_w$(WINDOW) data_if1_w1
+reproduce: data_if1_w$(WINDOW) data_if1_w1
 	python predict.py --data_dir data_if1_w$(WINDOW) --output $(RESULTS)/bilstm_predictions.npz
 	python eval/evaluate.py --pred_file $(RESULTS)/bilstm_predictions.npz --data_dir_w1 data_if1_w1
 
