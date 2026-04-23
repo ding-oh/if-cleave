@@ -22,7 +22,6 @@ from utils.data import (
 
 def train_epoch(model, loader, optimizer, criterion, device,
                 label_smoothing=0.0, grad_clip=0.0):
-    """Train for one epoch."""
     model.train()
     total_loss = 0
     all_preds = []
@@ -35,7 +34,7 @@ def train_epoch(model, loader, optimizer, criterion, device,
         outputs = model(batch.x, batch.batch)
         targets = batch.y.float()
         if label_smoothing > 0:
-            targets = targets * (1 - 2 * label_smoothing) + label_smoothing
+            targets = targets * (1.0 - label_smoothing) + 0.5 * label_smoothing
         loss = criterion(outputs, targets)
 
         loss.backward()
@@ -60,7 +59,6 @@ def train_epoch(model, loader, optimizer, criterion, device,
 
 
 def evaluate(model, loader, criterion, device):
-    """Evaluate the model."""
     model.eval()
     total_loss = 0
     all_preds = []
@@ -89,7 +87,6 @@ def evaluate(model, loader, criterion, device):
 
 
 def train_fold(fold_idx, train_data, val_data, args, device):
-    """Train a single fold."""
     print(f"\n{'='*60}")
     print(f"Fold {fold_idx + 1}/{args.n_folds}")
     print(f"{'='*60}")
@@ -329,12 +326,12 @@ if __name__ == "__main__":
 
     parser.add_argument('--n_folds', type=int, default=4)
     parser.add_argument('--hidden_dim', type=int, default=256)
-    parser.add_argument('--dropout', type=float, default=0.2)
+    parser.add_argument('--dropout', type=float, default=0.4)
 
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=500)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--weight_decay', type=float, default=5e-3)
     parser.add_argument('--label_smoothing', type=float, default=0.0)
     parser.add_argument('--grad_clip', type=float, default=0.0)
 

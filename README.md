@@ -26,8 +26,9 @@ python data/build_db.py
 # 2. Extract IF1 + PROPKA features
 python data/extract_features.py
 
-# 3. Prepare window-based training data
+# 3. Prepare window-based training data (w=11 for training, w=1 for evaluation ground truth)
 python data/prepare_data.py --window_size 11
+python data/prepare_data.py --window_size 1
 ```
 
 ## Training

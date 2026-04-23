@@ -163,7 +163,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--pred_file', type=str, required=True,
-                        help='Path to {model}_predictions.npz from train.py')
+                        help='Path to predictions.npz from train.py or eval/predict.py')
     parser.add_argument('--data_dir_w1', type=str, default='data_if1_w1',
                         help='Directory containing window=1 test data')
     parser.add_argument('--eval_windows', type=int, nargs='+', default=[1, 3, 5, 7, 9, 11])

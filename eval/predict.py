@@ -28,8 +28,7 @@ def main(args):
     all_raw = train_raw + val_raw
     print(f"train+val: {len(all_raw)}, test: {len(test_raw)}")
 
-    ckpts = sorted(glob.glob(os.path.join(args.ckpt_dir, 'bilstm_fold*_best.pt'))
-                   or glob.glob(os.path.join(args.ckpt_dir, 'bilstm_fold*_norot_best.pt')))
+    ckpts = sorted(glob.glob(os.path.join(args.ckpt_dir, 'bilstm_fold*_best.pt')))
     if len(ckpts) != args.n_folds:
         raise RuntimeError(f"expected {args.n_folds} checkpoints in {args.ckpt_dir}, found {len(ckpts)}")
 
@@ -37,7 +36,6 @@ def main(args):
     fold_splits = list(kfold.split(all_raw))
 
     fold_probs = []
-    labels = None
     for k, (train_idx, _) in enumerate(fold_splits):
         fold_train = [all_raw[i] for i in train_idx]
         mean, std = compute_feature_stats(fold_train)
@@ -56,8 +54,6 @@ def main(args):
                 batch = Batch.from_data_list(test_std[i:i+args.batch_size]).to(device)
                 out = torch.sigmoid(model(batch.x, batch.batch)).cpu().numpy()
                 preds.append(out)
-                if k == 0 and labels is None:
-                    pass
         fold_probs.append(np.concatenate(preds))
         print(f"fold{k}: mean_prob={fold_probs[-1].mean():.4f}")
 
@@ -72,7 +68,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="4-fold ensemble inference")
     parser.add_argument('--ckpt_dir', type=str, default='checkpoints')
-    parser.add_argument('--data_dir', type=str, required=True,
+    parser.add_argument('--data_dir', type=str, default='data_if1_w11',
                         help='Directory containing train/val/test_data.pt (used for fold splits and stats)')
     parser.add_argument('--output', type=str, default='results/bilstm_predictions.npz')
     parser.add_argument('--n_folds', type=int, default=4)

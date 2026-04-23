@@ -3,8 +3,6 @@ from torch_geometric.data import Batch
 
 
 class CleavageDataset(torch.utils.data.Dataset):
-    """Dataset wrapper for cleavage data."""
-
     def __init__(self, data_list):
         self.data_list = data_list
 
@@ -16,12 +14,10 @@ class CleavageDataset(torch.utils.data.Dataset):
 
 
 def custom_collate(batch):
-    """Custom collate function for batching PyG Data objects."""
     return Batch.from_data_list(batch)
 
 
 def compute_feature_stats(data_list):
-    """Compute per-feature mean/std over a list of PyG Data objects."""
     total = total_sq = None
     count = 0
     for item in data_list:
@@ -39,6 +35,5 @@ def compute_feature_stats(data_list):
 
 
 def apply_standardization(data_list, mean, std):
-    """Apply per-feature standardization in-place."""
     for item in data_list:
         item.x = (item.x.float() - mean) / std
