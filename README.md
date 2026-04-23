@@ -51,12 +51,3 @@ if-cleave/
 └── checkpoints/    # 4-fold pre-trained weights
 ```
 
-## Citation
-
-```bibtex
-@article{ifcleave2026,
-  title={IF-Cleave: Inverse Folding-Based Deep Learning for MHC-II Antigen Processing Cleavage Site Prediction},
-  journal={Bioinformatics},
-  year={2026}
-}
-```
