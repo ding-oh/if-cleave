@@ -4,17 +4,16 @@ Inverse folding-based deep learning for MHC-II antigen processing cleavage site 
 
 IF-Cleave combines ESM-IF1 inverse folding embeddings (512D) with PROPKA physicochemical features (6D) to predict where endosomal proteases cleave antigen proteins for MHC class II presentation — a critical step in CD4+ T cell immune responses.
 
-## Inference
+## Quick Start
 
-Pre-trained 4-fold checkpoints are in `checkpoints/`.
+Pre-trained 4-fold checkpoints are shipped in `checkpoints/`. The Makefile chains data prep → inference/training → evaluation; each step skips if its output already exists.
 
 ```bash
-# 1. Produce ensemble predictions (applies per-fold standardization)
-python predict.py --data_dir data_if1_w11 --output results/bilstm_predictions.npz
-
-# 2. Window-based metrics
-python eval/evaluate.py --pred_file results/bilstm_predictions.npz --data_dir_w1 data_if1_w1
+make inference   # reproduce metrics with shipped checkpoints
+make train       # 4-fold CV from scratch, then evaluate
 ```
+
+Override defaults with `make inference PKL=path/to/features.pkl WINDOW=11 RESULTS=results`.
 
 ## Installation
 
@@ -29,36 +28,20 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121
 pip install -r requirements.txt
 ```
 
-## Data Pipeline
+## Prepare features (one-time)
+
+Needed before `make inference` or `make train` if `all_datasets_fixed.pkl` is not already present.
 
 ```bash
-# 1. Build PDB database from IEDB/UniProt/RCSB
-python data/build_db.py
-
-# 2. Extract IF1 + PROPKA features
-python data/extract_features.py
-
-# 3. Prepare window-based training data (w=11 for training, w=1 for evaluation ground truth)
-python data/prepare_data.py --window_size 11
-python data/prepare_data.py --window_size 1
-```
-
-## Training
-
-```bash
-# 4-fold cross-validation
-python train/train.py \
-    --hidden_dim 256 --dropout 0.4 \
-    --epochs 500 --batch_size 32 --lr 0.001 --weight_decay 0.005 \
-    --patience 20 --n_folds 4 --seed 42 \
-    --label_smoothing 0.05 --grad_clip 1.0 \
-    --data_dir data_if1_w11 --output_dir results
+python data/build_db.py          # Build PDB database from IEDB/UniProt/RCSB
+python data/extract_features.py  # Extract IF1 + PROPKA features -> all_datasets_fixed.pkl
 ```
 
 ## Project Structure
 
 ```
 if-cleave/
+├── Makefile        # End-to-end `make inference` / `make train` orchestration
 ├── predict.py      # 4-fold ensemble inference
 ├── model/          # IFCleave model architecture
 ├── train/          # K-fold cross-validation training
