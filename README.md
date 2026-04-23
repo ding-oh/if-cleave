@@ -4,6 +4,18 @@ Inverse folding-based deep learning for MHC-II antigen processing cleavage site 
 
 IF-Cleave combines ESM-IF1 inverse folding embeddings (512D) with PROPKA physicochemical features (6D) to predict where endosomal proteases cleave antigen proteins for MHC class II presentation — a critical step in CD4+ T cell immune responses.
 
+## Inference
+
+Pre-trained 4-fold checkpoints are in `checkpoints/`.
+
+```bash
+# 1. Produce ensemble predictions (applies per-fold standardization)
+python predict.py --data_dir data_if1_w11 --output results/bilstm_predictions.npz
+
+# 2. Window-based metrics
+python eval/evaluate.py --pred_file results/bilstm_predictions.npz --data_dir_w1 data_if1_w1
+```
+
 ## Installation
 
 ```bash
@@ -43,25 +55,14 @@ python train/train.py \
     --data_dir data_if1_w11 --output_dir results
 ```
 
-## Inference (reproduce paper numbers)
-
-Pre-trained 4-fold checkpoints are in `checkpoints/` (ensemble test MCC 0.260).
-
-```bash
-# 1. Produce ensemble predictions (applies per-fold standardization)
-python eval/predict.py --data_dir data_if1_w11 --output results/bilstm_predictions.npz
-
-# 2. Window-based metrics
-python eval/evaluate.py --pred_file results/bilstm_predictions.npz --data_dir_w1 data_if1_w1
-```
-
 ## Project Structure
 
 ```
 if-cleave/
+├── predict.py      # 4-fold ensemble inference
 ├── model/          # IFCleave model architecture
 ├── train/          # K-fold cross-validation training
-├── eval/           # Inference (predict.py) and window-based evaluation
+├── eval/           # Window-based evaluation
 ├── data/           # Data pipeline (IEDB → PDB → features → windows) + index.csv
 ├── utils/          # Shared utilities (metrics, dataset, standardization)
 └── checkpoints/    # 4-fold pre-trained weights

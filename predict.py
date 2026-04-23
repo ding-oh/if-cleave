@@ -13,7 +13,7 @@ import numpy as np
 from sklearn.model_selection import KFold
 from torch_geometric.data import Batch
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model.model import IFCleave
 from utils.data import compute_feature_stats, apply_standardization
 
