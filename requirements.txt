@@ -1,6 +1,8 @@
 # torch>=2.0 — install separately to match your CUDA version (see README)
+# torch-scatter — install separately from https://data.pyg.org/whl/torch-<VER>+cu<VER>.html
 torch-geometric>=2.4
 fair-esm
+biotite<1.0
 biopython
 freesasa
 propka
