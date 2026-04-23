@@ -6,7 +6,6 @@ import csv
 import hashlib
 import shutil
 import subprocess
-import tempfile
 import numpy as np
 import torch
 from torch_geometric.data import Data
@@ -34,8 +33,6 @@ def expand_labels_window(labels, window_size=9):
     for i in range(len(labels)):
         start = max(0, i - half_window)
         end = min(len(labels), i + half_window + 1)
-
-        # If any position in the window is 1, mark this position as 1
         if np.any(labels[start:end]):
             expanded[i] = 1
 
@@ -48,26 +45,22 @@ def load_cleavage_data(base_path="CleavgDB_clean",
     """
     Load CleavgDB_clean data with window-based label expansion.
     """
-    # First check if we have the preprocessed pickle file
     if os.path.exists(pkl_file):
         print(f"Loading preprocessed data from {pkl_file}")
         with open(pkl_file, 'rb') as f:
             all_data = pickle.load(f)
 
-        # Process data with window expansion
         processed_data = []
 
         for idx, (pdb_id, sample) in enumerate(tqdm(all_data.items(), desc="Processing samples")):
             if max_samples and idx >= max_samples:
                 break
 
-            features = sample['features']  # Shape: (seq_len, 518)
-            labels = sample['labels']      # Shape: (seq_len,)
+            features = sample['features']
+            labels = sample['labels']
 
-            # Expand labels using window approach
             expanded_labels = expand_labels_window(labels, window_size=window_size)
 
-            # Create PyG Data object
             data = Data(
                 x=torch.FloatTensor(features),
                 y=torch.FloatTensor(expanded_labels),
@@ -84,7 +77,6 @@ def load_cleavage_data(base_path="CleavgDB_clean",
     else:
         print(f"Preprocessed pickle not found. Loading from raw PDB directories...")
 
-        # Get all PDB directories
         pdb_dirs = [d for d in os.listdir(base_path)
                     if os.path.isdir(os.path.join(base_path, d))]
 
@@ -96,7 +88,6 @@ def load_cleavage_data(base_path="CleavgDB_clean",
         for pdb_dir in tqdm(pdb_dirs, desc="Loading PDB data"):
             pdb_path = os.path.join(base_path, pdb_dir)
 
-            # Load protein structure and features
             protein_pdb = os.path.join(pdb_path, "protein.pdb")
             protein_pka = os.path.join(pdb_path, "protein.pka")
 
@@ -104,7 +95,6 @@ def load_cleavage_data(base_path="CleavgDB_clean",
                 print(f"Warning: Missing PDB file for {pdb_dir}")
                 continue
 
-            # Get epitope directories
             epitope_dirs = [d for d in os.listdir(pdb_path)
                            if d.startswith('epitope')]
 
@@ -112,7 +102,6 @@ def load_cleavage_data(base_path="CleavgDB_clean",
                 print(f"Warning: No epitopes found for {pdb_dir}")
                 continue
 
-            # Load epitope information
             all_cleavage_positions = []
 
             for epitope_dir in epitope_dirs:
@@ -150,11 +139,10 @@ def create_splits(data_list, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15,
     else:
         assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6
 
-    # Get PDB IDs
     pdb_ids = [d.pdb_id for d in data_list]
 
     if group_map:
-        # Split at sequence group level to avoid identical sequences across splits
+        # Split at sequence-group level so identical sequences don't leak across splits
         group_ids = sorted(set(group_map.values()))
         train_val_groups, test_groups = train_test_split(
             group_ids,
@@ -173,14 +161,12 @@ def create_splits(data_list, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15,
         val_ids = [pid for pid in pdb_ids if group_map.get(pid) in val_groups]
         test_ids = [pid for pid in pdb_ids if group_map.get(pid) in test_groups]
     else:
-        # First split: train+val vs test
         train_val_ids, test_ids = train_test_split(
             pdb_ids,
             test_size=test_ratio,
             random_state=random_seed
         )
 
-        # Second split: train vs val
         val_size = val_ratio if val_ratio_of_trainval else val_ratio / (train_ratio + val_ratio)
         train_ids, val_ids = train_test_split(
             train_val_ids,
@@ -188,7 +174,6 @@ def create_splits(data_list, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15,
             random_state=random_seed
         )
 
-    # Create datasets
     train_data = [d for d in data_list if d.pdb_id in train_ids]
     val_data = [d for d in data_list if d.pdb_id in val_ids]
     test_data = [d for d in data_list if d.pdb_id in test_ids]
@@ -309,19 +294,15 @@ def build_cdhit_group_map(base_path, pdb_ids, output_dir, cdhit_exe="cd-hit",
     return group_map
 
 def main():
-    """
-    Main function to prepare GeoCleav dataset.
-    """
     print("=" * 50)
-    print("GeoCleav Dataset Preparation")
+    print("IF-Cleave Dataset Preparation")
     print("=" * 50)
 
-    parser = argparse.ArgumentParser(description="Prepare GeoCleav dataset splits")
-    parser.add_argument('--window_size', type=int, default=9,
+    parser = argparse.ArgumentParser(description="Prepare IF-Cleave dataset splits")
+    parser.add_argument('--window_size', type=int, default=11,
                         help='Window size for label expansion')
-    parser.add_argument('--output_dir', type=str,
-                        default="data_if1",
-                        help='Output directory for .pt splits')
+    parser.add_argument('--output_dir', type=str, default=None,
+                        help='Output directory for .pt splits (default: data_if1_w{window_size})')
     parser.add_argument('--pkl_file', type=str,
                         default="all_datasets_fixed.pkl",
                         help='Path to preprocessed dataset pickle')
@@ -356,14 +337,11 @@ def main():
                         help='CD-HIT memory in MB (0 for unlimited)')
     args = parser.parse_args()
 
-    # Parameters
     window_size = args.window_size
-    output_dir = args.output_dir
+    output_dir = args.output_dir or f"data_if1_w{window_size}"
 
-    # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
-    # Load data
     print(f"\nLoading data with {window_size}-window label expansion...")
     data_list = load_cleavage_data(window_size=window_size, pkl_file=args.pkl_file)
 
@@ -371,7 +349,6 @@ def main():
         print("Error: No data loaded!")
         return
 
-    # Create splits
     print("\nCreating train/val/test splits...")
     group_map = None
     split_method = "random"
@@ -403,7 +380,6 @@ def main():
         val_ratio_of_trainval=args.val_ratio_of_trainval
     )
 
-    # Calculate statistics
     print("\n" + "=" * 50)
     print("Dataset Statistics")
     print("=" * 50)
@@ -421,14 +397,12 @@ def main():
         print(f"  Positive ratio (expanded): {stats['positive_ratio_expanded']:.2%}")
         print(f"  Window expansion factor: {stats['window_expansion_factor']:.2f}x")
 
-    # Save datasets
     print(f"\nSaving datasets to {output_dir}...")
 
     torch.save(train_data, os.path.join(output_dir, 'train_data.pt'))
     torch.save(val_data, os.path.join(output_dir, 'val_data.pt'))
     torch.save(test_data, os.path.join(output_dir, 'test_data.pt'))
 
-    # Save metadata
     if args.test_list_csv:
         print(f"\nSaving test set list to {args.test_list_csv}...")
         with open(args.test_list_csv, "w", newline="") as f:

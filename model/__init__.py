@@ -1,1 +1,1 @@
-from .model import BiLSTMGNN, get_model
+from .model import IFCleave

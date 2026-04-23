@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import global_mean_pool, global_max_pool
-from torch_geometric.utils import add_self_loops, degree
-import numpy as np
 
 
 class RotaryPositionEmbedding(nn.Module):
@@ -27,7 +24,6 @@ class RotaryPositionEmbedding(nn.Module):
         cos_emb = emb.cos()[None, :, :dim]
         sin_emb = emb.sin()[None, :, :dim]
 
-        # Apply rotary embeddings
         x1 = x[..., :dim//2]
         x2 = x[..., dim//2:]
 
@@ -61,31 +57,27 @@ class GatedFusion(nn.Module):
         return fused
 
 
-class BiLSTMGNN(nn.Module):
-    """Advanced BiLSTM with RoPE, Attention, and Gated Fusion"""
+class IFCleave(nn.Module):
+    """IF-Cleave: RoPE + MHA + BiLSTM + Gated Fusion for cleavage site prediction."""
 
     def __init__(self, input_dim=518, hidden_dim=256, output_dim=1,
                  num_layers=2, num_heads=8, dropout=0.2, use_batchnorm=False):
-        super(BiLSTMGNN, self).__init__()
+        super().__init__()
 
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
 
-        # Input projection
         self.input_proj = nn.Linear(input_dim, hidden_dim)
         self.input_bn = nn.BatchNorm1d(hidden_dim) if use_batchnorm else nn.Identity()
         self.input_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
 
-        # RoPE for positional encoding
         self.rope = RotaryPositionEmbedding(hidden_dim)
 
-        # Pre-LSTM attention
         self.pre_attention = nn.MultiheadAttention(
             hidden_dim, num_heads, dropout=dropout, batch_first=True
         )
         self.pre_attn_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
 
-        # BiLSTM
         self.lstm = nn.LSTM(
             hidden_dim, hidden_dim // 2,
             num_layers=num_layers,
@@ -95,10 +87,8 @@ class BiLSTMGNN(nn.Module):
         )
         self.post_lstm_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
 
-        # Gated fusion for original features
         self.gated_fusion = GatedFusion(input_dim, hidden_dim)
 
-        # Final layers
         self.ffn = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim * 2),
             nn.GELU(),
@@ -113,10 +103,9 @@ class BiLSTMGNN(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, batch=None):
-        # x: [N, 518]
-        x_orig = x  # Preserve original features
+        # x: [N, input_dim]; when batch is given, N is the sum of per-protein seq_len
+        x_orig = x
 
-        # Project input
         x = self.input_proj(x)
         x = self.input_bn(x)
         x = F.gelu(x)
@@ -130,27 +119,22 @@ class BiLSTMGNN(nn.Module):
 
             for b in range(batch_size):
                 mask = (batch == b)
-                x_batch = x_proj[mask].unsqueeze(0)  # [1, seq_len, hidden_dim]
-                x_proj_batch = x_proj[mask]  # [seq_len, hidden_dim]
+                x_batch = x_proj[mask].unsqueeze(0)
+                x_proj_batch = x_proj[mask]
                 x_orig_batch = x_orig[mask]
 
-                # Apply RoPE
                 x_batch = self.rope(x_batch)
 
-                # Pre-LSTM attention with residual
                 attn_out, _ = self.pre_attention(x_batch, x_batch, x_batch)
                 x_batch = self.pre_attn_norm(x_batch + self.dropout(attn_out))
 
-                # BiLSTM with residual
                 residual = x_batch
                 lstm_out, _ = self.lstm(x_batch)
                 x_batch = self.post_lstm_norm(lstm_out + residual)
 
-                # Gated fusion with original features
-                x_batch = x_batch.squeeze(0)  # [seq_len, hidden_dim]
+                x_batch = x_batch.squeeze(0)
                 x_batch = self.gated_fusion(x_orig_batch, x_batch)
 
-                # FFN with residual
                 residual = x_batch
                 ffn_out = self.ffn(x_batch)
                 x_batch = self.ffn_norm(residual + self.dropout(ffn_out))
@@ -160,8 +144,7 @@ class BiLSTMGNN(nn.Module):
 
             x = torch.cat(outputs, dim=0)
         else:
-            # Single sequence (inference mode)
-            x = x_proj.unsqueeze(0)  # [1, N, hidden_dim]
+            x = x_proj.unsqueeze(0)
 
             x = self.rope(x)
 
@@ -180,18 +163,5 @@ class BiLSTMGNN(nn.Module):
             x = self.ffn_norm(residual + self.dropout(ffn_out))
             x = self.long_skip_norm(x + x_proj)
 
-        # Output projection
         x = self.output_proj(x)
         return x.squeeze(-1)
-
-
-def get_model(model_name, **kwargs):
-    """Factory function to get model by name"""
-    models = {
-        'bilstm': BiLSTMGNN
-    }
-
-    if model_name not in models:
-        raise ValueError(f"Model {model_name} not found. Available: {list(models.keys())}")
-
-    return models[model_name](**kwargs)

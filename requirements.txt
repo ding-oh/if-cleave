@@ -1,4 +1,4 @@
-torch>=2.0
+# torch>=2.0 — install separately to match your CUDA version (see README)
 torch-geometric>=2.4
 fair-esm
 biopython

@@ -12,6 +12,7 @@ build/
 *.h5
 *.npz
 *.tar.gz
+!checkpoints/*.pt
 
 # Data directories
 CleavgDB_clean/
@@ -24,6 +25,7 @@ vatreptacog_testset/
 esm2/
 
 # Results & outputs
+results/
 results_*/
 reports/
 analysis_plots/
@@ -42,4 +44,15 @@ wandb/
 *.zip
 *.xlsx
 *.csv
+!data/index.csv
 *.log
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Development notes
+note*.md
+TODO*.md
+notes/
+*_notes.md

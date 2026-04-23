@@ -18,3 +18,27 @@ class CleavageDataset(torch.utils.data.Dataset):
 def custom_collate(batch):
     """Custom collate function for batching PyG Data objects."""
     return Batch.from_data_list(batch)
+
+
+def compute_feature_stats(data_list):
+    """Compute per-feature mean/std over a list of PyG Data objects."""
+    total = total_sq = None
+    count = 0
+    for item in data_list:
+        x = item.x.float()
+        if total is None:
+            total = torch.zeros(x.shape[1], dtype=x.dtype)
+            total_sq = torch.zeros(x.shape[1], dtype=x.dtype)
+        total += x.sum(dim=0)
+        total_sq += (x * x).sum(dim=0)
+        count += x.shape[0]
+    mean = total / max(count, 1)
+    var = total_sq / max(count, 1) - mean * mean
+    std = torch.sqrt(torch.clamp(var, min=1e-12))
+    return mean, std
+
+
+def apply_standardization(data_list, mean, std):
+    """Apply per-feature standardization in-place."""
+    for item in data_list:
+        item.x = (item.x.float() - mean) / std

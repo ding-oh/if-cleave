@@ -9,6 +9,11 @@ IF-Cleave combines ESM-IF1 inverse folding embeddings (512D) with PROPKA physico
 ```bash
 conda create -n ifcleave python=3.10
 conda activate ifcleave
+
+# Install PyTorch matching your CUDA driver version (check with nvidia-smi)
+# Example for CUDA 12.1:
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+
 pip install -r requirements.txt
 ```
 
@@ -16,10 +21,10 @@ pip install -r requirements.txt
 
 ```bash
 # 1. Build PDB database from IEDB/UniProt/RCSB
-python data/build_cleavage_db.py
+python data/build_db.py
 
 # 2. Extract IF1 + PROPKA features
-python data/build_if1_propka_dataset.py
+python data/extract_features.py
 
 # 3. Prepare window-based training data
 python data/prepare_data.py --window_size 11
@@ -29,38 +34,36 @@ python data/prepare_data.py --window_size 11
 
 ```bash
 # 4-fold cross-validation
-python train/train_kfold.py \
-    --model bilstm --hidden_dim 256 --dropout 0.4 \
+python train/train.py \
+    --hidden_dim 256 --dropout 0.4 \
     --epochs 500 --batch_size 32 --lr 0.001 --weight_decay 0.005 \
-    --loss bce --patience 20 --n_folds 4 --seed 42 \
+    --patience 20 --n_folds 4 --seed 42 \
     --label_smoothing 0.05 --grad_clip 1.0 \
     --data_dir data_if1_w11 --output_dir results
 ```
 
-## Evaluation
+## Inference (reproduce paper numbers)
+
+Pre-trained 4-fold checkpoints are in `checkpoints/` (ensemble test MCC 0.260).
 
 ```bash
-# Window-based metrics
-python eval/evaluate.py --results_dir results --data_dir data_if1_w11
+# 1. Produce ensemble predictions (applies per-fold standardization)
+python eval/predict.py --data_dir data_if1_w11 --output results/bilstm_predictions.npz
 
-# CD4+ epitope boundary validation
-python eval/validate_cd4.py --target all --device cuda
-
-# Publication figures
-python eval/generate_figures.py
+# 2. Window-based metrics
+python eval/evaluate.py --pred_file results/bilstm_predictions.npz --data_dir_w1 data_if1_w1
 ```
 
 ## Project Structure
 
 ```
 if-cleave/
-├── model/          # BiLSTMGNN architecture + feature extraction
+├── model/          # IFCleave model architecture
 ├── train/          # K-fold cross-validation training
-├── eval/           # Evaluation, biological validation, figures
-├── data/           # Data pipeline (IEDB → PDB → features → windows)
-├── utils/          # Shared utilities (metrics, dataset, feature ablation)
-├── configs/        # Training configuration
-└── scripts/        # Shell scripts for ablation studies
+├── eval/           # Inference (predict.py) and window-based evaluation
+├── data/           # Data pipeline (IEDB → PDB → features → windows) + index.csv
+├── utils/          # Shared utilities (metrics, dataset, standardization)
+└── checkpoints/    # 4-fold pre-trained weights
 ```
 
 ## Citation

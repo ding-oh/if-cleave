@@ -8,12 +8,14 @@ Instead of exact residue matching, this evaluates:
 - False Negative: True cleavage site has no prediction within its window
 """
 
+import os
+import sys
+import json
 import numpy as np
 import torch
 from pathlib import Path
-from sklearn.metrics import matthews_corrcoef, precision_score, recall_score, f1_score, accuracy_score
-import json
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.metrics import convert_to_native
 
 def get_cleavage_sites(labels):
@@ -84,7 +86,7 @@ def window_based_evaluation(y_true_original, y_pred, eval_window):
     }
 
 
-def site_based_evaluation(y_true_original, y_pred, y_prob, eval_window):
+def site_based_evaluation(y_true_original, y_pred, eval_window):
     """
     Site-based evaluation: For each true cleavage site, check if there's
     at least one positive prediction within its window.
@@ -111,38 +113,25 @@ def site_based_evaluation(y_true_original, y_pred, y_prob, eval_window):
     }
 
 
-def load_and_evaluate(results_dir, data_dir_w1, eval_windows=[1, 3, 5, 7, 9]):
+def load_and_evaluate(pred_file, data_dir_w1, eval_windows=[1, 3, 5, 7, 9]):
     """
     Load predictions and evaluate with different window sizes.
 
     Args:
-        results_dir: Directory containing bilstm_predictions.npz
+        pred_file: Path to {model}_predictions.npz
         data_dir_w1: Directory containing window=1 (original) test data
         eval_windows: List of evaluation window sizes to try
     """
-    # Load predictions
-    pred_file = Path(results_dir) / 'bilstm_predictions.npz'
     pred_data = np.load(pred_file)
-
-    y_prob = pred_data['predictions']     # Actually probabilities
-    y_true_expanded = pred_data['labels'] # Labels used during training (may be expanded)
-
-    # Apply threshold to get binary predictions
+    y_prob = pred_data['predictions']
     threshold = 0.5
     y_pred = (y_prob >= threshold).astype(int)
 
-    # Load original labels (window=1)
     test_data = torch.load(Path(data_dir_w1) / 'test_data.pt', weights_only=False)
-
-    # Concatenate all original labels
-    y_true_original = []
-    for data in test_data:
-        y_true_original.append(data.y.numpy())
-    y_true_original = np.concatenate(y_true_original)
+    y_true_original = np.concatenate([data.y.numpy() for data in test_data])
 
     print(f"Loaded {len(y_prob)} predictions")
     print(f"Original cleavage sites: {np.sum(y_true_original)}")
-    print(f"Expanded positive labels: {np.sum(y_true_expanded)}")
     print(f"Predicted positives: {np.sum(y_pred)}")
     print()
 
@@ -152,7 +141,7 @@ def load_and_evaluate(results_dir, data_dir_w1, eval_windows=[1, 3, 5, 7, 9]):
 
     for window in eval_windows:
         metrics = window_based_evaluation(y_true_original, y_pred, window)
-        site_metrics = site_based_evaluation(y_true_original, y_pred, y_prob, window)
+        site_metrics = site_based_evaluation(y_true_original, y_pred, window)
 
         results.append(metrics)
         site_results.append(site_metrics)
@@ -173,32 +162,22 @@ def load_and_evaluate(results_dir, data_dir_w1, eval_windows=[1, 3, 5, 7, 9]):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--results_dir', type=str, required=True,
-                        help='Directory containing bilstm_predictions.npz')
+    parser.add_argument('--pred_file', type=str, required=True,
+                        help='Path to {model}_predictions.npz from train.py')
     parser.add_argument('--data_dir_w1', type=str, default='data_if1_w1',
                         help='Directory containing window=1 test data')
-    parser.add_argument('--eval_windows', type=int, nargs='+', default=[1, 3, 5, 7, 9, 11],
-                        help='Evaluation window sizes')
+    parser.add_argument('--eval_windows', type=int, nargs='+', default=[1, 3, 5, 7, 9, 11])
     args = parser.parse_args()
 
-    print(f"Results directory: {args.results_dir}")
-    print(f"Original data (w1): {args.data_dir_w1}")
-    print()
-
     results, site_results = load_and_evaluate(
-        args.results_dir,
-        args.data_dir_w1,
-        args.eval_windows
+        args.pred_file, args.data_dir_w1, args.eval_windows
     )
 
-    # Save results
-    output = {
-        'results_dir': str(args.results_dir),
-        'window_metrics': results,
-        'site_metrics': site_results
-    }
-
-    output_file = Path(args.results_dir) / 'window_evaluation.json'
+    output_file = Path(args.pred_file).parent / 'window_evaluation.json'
     with open(output_file, 'w') as f:
-        json.dump(convert_to_native(output), f, indent=2)
+        json.dump(convert_to_native({
+            'pred_file': str(args.pred_file),
+            'window_metrics': results,
+            'site_metrics': site_results,
+        }), f, indent=2)
     print(f"Saved results to {output_file}")
