@@ -7,7 +7,6 @@ and ensembles the 4 pre-trained folds into a per-residue probability.
 import argparse
 import glob
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -17,18 +16,9 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data.extract_features import extract_if1_embeddings, load_if1_model
+from data.propka import build_propka_features as _build_propka_slice
+from data.propka import chain_residue_order
 from model.model import IFCleave
-
-
-IONIZABLE_AA = {"ASP", "GLU", "HIS", "TYR", "LYS", "ARG", "CYS", "N+", "C-"}
-# 3-letter -> 1-letter for matching IF1 sequence output
-AA3TO1 = {
-    "ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D", "CYS": "C",
-    "GLN": "Q", "GLU": "E", "GLY": "G", "HIS": "H", "ILE": "I",
-    "LEU": "L", "LYS": "K", "MET": "M", "PHE": "F", "PRO": "P",
-    "SER": "S", "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V",
-}
-PROPKA_DEFAULT = np.array([7.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
 
 def run_propka(pdb_path, workdir):
@@ -45,72 +35,11 @@ def run_propka(pdb_path, workdir):
     return pka_path
 
 
-_ROW_RE = re.compile(
-    r"^([A-Z][A-Z0-9+\-]{1,2})\s+(\d+)\s+([A-Z])\s+"
-    r"([\-0-9.]+)\s+(\d+)\s*%\s+"
-    r"([\-0-9.]+)\s+(\d+)\s+"
-    r"([\-0-9.]+)\s+(\d+)\s+"
-    r"([\-0-9.]+)\s+[A-Z+\-]+\s+(\d+)\s+[A-Z]"
-)
-
-
-def parse_pka_file(pka_path, chain_id):
-    """Return {(res_name, res_num): (pka, buried, hbond_partner, desolv_reg, num_vol, desolv_eff)}."""
-    rows = {}
-    with open(pka_path) as fh:
-        for line in fh:
-            m = _ROW_RE.match(line.strip())
-            if not m:
-                continue
-            res, num, ch = m.group(1), int(m.group(2)), m.group(3)
-            if ch != chain_id or res not in IONIZABLE_AA:
-                continue
-            pka = float(m.group(4))
-            buried = float(m.group(5)) / 100.0
-            desolv_reg = float(m.group(6))
-            num_vol = float(m.group(7))
-            desolv_eff = float(m.group(8))
-            hbond_partner = float(m.group(11))
-            if (res, num) not in rows:
-                rows[(res, num)] = (pka, buried, hbond_partner, desolv_reg, num_vol, desolv_eff)
-    return rows
-
-
-def extract_residue_list(pdb_path, chain_id):
-    """Return [(res_name, res_num), ...] for standard amino acids in the chain, in order."""
-    seen = set()
-    out = []
-    with open(pdb_path) as fh:
-        for line in fh:
-            if not line.startswith(("ATOM  ", "HETATM")):
-                continue
-            if line[21] != chain_id:
-                continue
-            res = line[17:20].strip()
-            if res not in AA3TO1:
-                continue
-            try:
-                num = int(line[22:26])
-            except ValueError:
-                continue
-            key = (res, num)
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append(key)
-    return out
-
-
 def build_propka_features(pdb_path, chain_id, workdir):
-    residues = extract_residue_list(pdb_path, chain_id)
     pka_path = run_propka(pdb_path, workdir)
-    ion_rows = parse_pka_file(pka_path, chain_id)
-
-    features = np.tile(PROPKA_DEFAULT, (len(residues), 1))
-    for i, key in enumerate(residues):
-        if key in ion_rows:
-            features[i] = ion_rows[key]
-    return features, residues
+    propka = _build_propka_slice(pdb_path, pka_path, chain_id)
+    residues = chain_residue_order(pdb_path, chain_id)
+    return propka, residues
 
 
 def predict(pdb_path, chain_id, ckpt_dir, device):
